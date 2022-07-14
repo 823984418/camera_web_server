@@ -29,7 +29,9 @@ extern "C" {
 #endif
 
 void SdCard_init();
+
 //void sd_write(const char *_jpg_buf, int _jpg_buf_len);
+
 #ifdef __cplusplus
 }
 #endif

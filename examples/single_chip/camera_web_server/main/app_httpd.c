@@ -34,14 +34,18 @@
 #include "esp32-hal-log.h"
 #define TAG ""
 #else
+
 #include "esp_log.h"
+
 static const char *TAG = "camera_httpd";
 #endif
 
 #if CONFIG_ESP_FACE_DETECT_ENABLED
 
 #if CONFIG_ESP_FACE_DETECT_MTMN
+
 #include "fd_forward.h"
+
 #endif
 
 #if CONFIG_ESP_FACE_DETECT_LSSH
@@ -49,6 +53,7 @@ static const char *TAG = "camera_httpd";
 #endif
 
 #if CONFIG_ESP_FACE_RECOGNITION_ENABLED
+
 #include "fr_forward.h"
 
 #define ENROLL_CONFIRM_TIMES 5
@@ -75,8 +80,7 @@ bool isStreaming = false;
 #endif
 #endif
 
-typedef struct
-{
+typedef struct {
     httpd_req_t *req;
     size_t len;
 } jpg_chunking_t;
@@ -110,8 +114,7 @@ static face_id_list id_list = {0};
 
 #endif
 
-typedef struct
-{
+typedef struct {
     size_t size;  //number of values used for filtering
     size_t index; //current value index
     size_t count; //value count
@@ -121,13 +124,11 @@ typedef struct
 
 static ra_filter_t ra_filter;
 
-static ra_filter_t *ra_filter_init(ra_filter_t *filter, size_t sample_size)
-{
+static ra_filter_t *ra_filter_init(ra_filter_t *filter, size_t sample_size) {
     memset(filter, 0, sizeof(ra_filter_t));
 
-    filter->values = (int *)malloc(sample_size * sizeof(int));
-    if (!filter->values)
-    {
+    filter->values = (int *) malloc(sample_size * sizeof(int));
+    if (!filter->values) {
         return NULL;
     }
     memset(filter->values, 0, sample_size * sizeof(int));
@@ -136,10 +137,8 @@ static ra_filter_t *ra_filter_init(ra_filter_t *filter, size_t sample_size)
     return filter;
 }
 
-static int ra_filter_run(ra_filter_t *filter, int value)
-{
-    if (!filter->values)
-    {
+static int ra_filter_run(ra_filter_t *filter, int value) {
+    if (!filter->values) {
         return value;
     }
     filter->sum -= filter->values[filter->index];
@@ -147,8 +146,7 @@ static int ra_filter_run(ra_filter_t *filter, int value)
     filter->sum += filter->values[filter->index];
     filter->index++;
     filter->index = filter->index % filter->size;
-    if (filter->count < filter->size)
-    {
+    if (filter->count < filter->size) {
         filter->count++;
     }
     return filter->sum / filter->count;
@@ -156,8 +154,8 @@ static int ra_filter_run(ra_filter_t *filter, int value)
 
 #if CONFIG_ESP_FACE_DETECT_ENABLED
 #if CONFIG_ESP_FACE_RECOGNITION_ENABLED
-static void rgb_print(dl_matrix3du_t *image_matrix, uint32_t color, const char *str)
-{
+
+static void rgb_print(dl_matrix3du_t *image_matrix, uint32_t color, const char *str) {
     fb_data_t fb;
     fb.width = image_matrix->w;
     fb.height = image_matrix->h;
@@ -167,8 +165,7 @@ static void rgb_print(dl_matrix3du_t *image_matrix, uint32_t color, const char *
     fb_gfx_print(&fb, (fb.width - (strlen(str) * 14)) / 2, 10, color, str);
 }
 
-static int rgb_printf(dl_matrix3du_t *image_matrix, uint32_t color, const char *format, ...)
-{
+static int rgb_printf(dl_matrix3du_t *image_matrix, uint32_t color, const char *format, ...) {
     char loc_buf[64];
     char *temp = loc_buf;
     int len;
@@ -178,34 +175,29 @@ static int rgb_printf(dl_matrix3du_t *image_matrix, uint32_t color, const char *
     va_copy(copy, arg);
     len = vsnprintf(loc_buf, sizeof(loc_buf), format, arg);
     va_end(copy);
-    if (len >= sizeof(loc_buf))
-    {
-        temp = (char *)malloc(len + 1);
-        if (temp == NULL)
-        {
+    if (len >= sizeof(loc_buf)) {
+        temp = (char *) malloc(len + 1);
+        if (temp == NULL) {
             return 0;
         }
     }
     vsnprintf(temp, len + 1, format, arg);
     va_end(arg);
     rgb_print(image_matrix, color, temp);
-    if (len > 64)
-    {
+    if (len > 64) {
         free(temp);
     }
     return len;
 }
+
 #endif
-static void draw_face_boxes(dl_matrix3du_t *image_matrix, box_array_t *boxes, int face_id)
-{
+
+static void draw_face_boxes(dl_matrix3du_t *image_matrix, box_array_t *boxes, int face_id) {
     int x, y, w, h, i;
     uint32_t color = FACE_COLOR_YELLOW;
-    if (face_id < 0)
-    {
+    if (face_id < 0) {
         color = FACE_COLOR_RED;
-    }
-    else if (face_id > 0)
-    {
+    } else if (face_id > 0) {
         color = FACE_COLOR_GREEN;
     }
     fb_data_t fb;
@@ -214,13 +206,12 @@ static void draw_face_boxes(dl_matrix3du_t *image_matrix, box_array_t *boxes, in
     fb.data = image_matrix->item;
     fb.bytes_per_pixel = 3;
     fb.format = FB_BGR888;
-    for (i = 0; i < boxes->len; i++)
-    {
+    for (i = 0; i < boxes->len; i++) {
         // rectangle box
-        x = (int)boxes->box[i].box_p[0];
-        y = (int)boxes->box[i].box_p[1];
-        w = (int)boxes->box[i].box_p[2] - x + 1;
-        h = (int)boxes->box[i].box_p[3] - y + 1;
+        x = (int) boxes->box[i].box_p[0];
+        y = (int) boxes->box[i].box_p[1];
+        w = (int) boxes->box[i].box_p[2] - x + 1;
+        h = (int) boxes->box[i].box_p[3] - y + 1;
         fb_gfx_drawFastHLine(&fb, x, y, w, color);
         fb_gfx_drawFastHLine(&fb, x, y + h - 1, w, color);
         fb_gfx_drawFastVLine(&fb, x, y, h, color);
@@ -236,6 +227,7 @@ static void draw_face_boxes(dl_matrix3du_t *image_matrix, box_array_t *boxes, in
 #endif
     }
 }
+
 #if 0
 
 static int8_t save_face_id_to_flash_name(face_id_name_list *id_list,char * name )
@@ -349,65 +341,53 @@ int8_t e_delete_face_id_in_flash(void)
 }
 int8_t e_read_face_id_from_flash(uint8_t sv_id_num,uint8_t cf_times)
 {
-	uint8_t sv_id_num_t=sv_id_num&0x0f;
-	uint8_t cf_times_t=cf_times&0xff;
-	
-	while(delete_face(&id_list));
-	face_id_init(&id_list, sv_id_num_t, cf_times_t);
+    uint8_t sv_id_num_t=sv_id_num&0x0f;
+    uint8_t cf_times_t=cf_times&0xff;
 
-    	return read_face_id_from_flash(&id_list);
+    while(delete_face(&id_list));
+    face_id_init(&id_list, sv_id_num_t, cf_times_t);
+
+        return read_face_id_from_flash(&id_list);
 }
 #endif
 #if CONFIG_ESP_FACE_RECOGNITION_ENABLED
-static int run_face_recognition(dl_matrix3du_t *image_matrix, box_array_t *net_boxes)
-{
+
+static int run_face_recognition(dl_matrix3du_t *image_matrix, box_array_t *net_boxes) {
     dl_matrix3du_t *aligned_face = NULL;
     int matched_id = 0;
 
     aligned_face = dl_matrix3du_alloc(1, FACE_WIDTH, FACE_HEIGHT, 3);
-    if (!aligned_face)
-    {
+    if (!aligned_face) {
         ESP_LOGE(TAG, "Could not allocate face recognition buffer");
         return matched_id;
     }
-    if (align_face(net_boxes, image_matrix, aligned_face) == ESP_OK)
-    {
-        if (is_enrolling == 1)
-        {
+    if (align_face(net_boxes, image_matrix, aligned_face) == ESP_OK) {
+        if (is_enrolling == 1) {
             int8_t left_sample_face;
 
             left_sample_face = enroll_face(&id_list, aligned_face);
 
-            if (left_sample_face == (ENROLL_CONFIRM_TIMES - 1))
-            {
+            if (left_sample_face == (ENROLL_CONFIRM_TIMES - 1)) {
                 ESP_LOGI(TAG, "Enrolling Face ID: %d", id_list.tail);// 2
             }
             ESP_LOGI(TAG, "Enrolling Face ID: %d sample %d", id_list.tail, ENROLL_CONFIRM_TIMES - left_sample_face);
             rgb_printf(image_matrix, FACE_COLOR_CYAN, "ID[%u] Sample[%u]", id_list.tail, ENROLL_CONFIRM_TIMES - left_sample_face);
-            if (left_sample_face == 0)
-            {
+            if (left_sample_face == 0) {
                 is_enrolling = 0;
                 ESP_LOGI(TAG, "Enrolled Face ID: %d", id_list.tail);
             }
-        }
-        else
-        {
+        } else {
             matched_id = recognize_face(&id_list, aligned_face);
-            if (matched_id >= 0)
-            {
+            if (matched_id >= 0) {
                 ESP_LOGW(TAG, "Match Face ID: %u", matched_id);
                 rgb_printf(image_matrix, FACE_COLOR_GREEN, "Hello Subject %u", matched_id);
-            }
-            else
-            {
+            } else {
                 ESP_LOGW(TAG, "No Match Found");
                 rgb_print(image_matrix, FACE_COLOR_RED, "Intruder Alert!");
                 matched_id = -1;
             }
         }
-    }
-    else
-    {
+    } else {
         ESP_LOGW(TAG, "Face Not Aligned");
         //rgb_print(image_matrix, FACE_COLOR_YELLOW, "Human Detected");
     }
@@ -415,6 +395,7 @@ static int run_face_recognition(dl_matrix3du_t *image_matrix, box_array_t *net_b
     dl_matrix3du_free(aligned_face);
     return matched_id;
 }
+
 #endif
 #endif
 
@@ -432,23 +413,19 @@ void enable_led(bool en)
 }
 #endif
 
-static size_t jpg_encode_stream(void *arg, size_t index, const void *data, size_t len)
-{
-    jpg_chunking_t *j = (jpg_chunking_t *)arg;
-    if (!index)
-    {
+static size_t jpg_encode_stream(void *arg, size_t index, const void *data, size_t len) {
+    jpg_chunking_t *j = (jpg_chunking_t *) arg;
+    if (!index) {
         j->len = 0;
     }
-    if (httpd_resp_send_chunk(j->req, (const char *)data, len) != ESP_OK)
-    {
+    if (httpd_resp_send_chunk(j->req, (const char *) data, len) != ESP_OK) {
         return 0;
     }
     j->len += len;
     return len;
 }
 
-static esp_err_t capture_handler(httpd_req_t *req)
-{
+static esp_err_t capture_handler(httpd_req_t *req) {
     camera_fb_t *fb = NULL;
     esp_err_t res = ESP_OK;
     int64_t fr_start = esp_timer_get_time();
@@ -462,8 +439,7 @@ static esp_err_t capture_handler(httpd_req_t *req)
     fb = esp_camera_fb_get();
 #endif
 
-    if (!fb)
-    {
+    if (!fb) {
         ESP_LOGE(TAG, "Camera capture failed");
         httpd_resp_send_500(req);
         return ESP_FAIL;
@@ -475,7 +451,7 @@ static esp_err_t capture_handler(httpd_req_t *req)
 
     char ts[32];
     snprintf(ts, 32, "%ld.%06ld", fb->timestamp.tv_sec, fb->timestamp.tv_usec);
-    httpd_resp_set_hdr(req, "X-Timestamp", (const char *)ts);
+    httpd_resp_set_hdr(req, "X-Timestamp", (const char *) ts);
 
 #if CONFIG_ESP_FACE_DETECT_ENABLED
     size_t out_len, out_width, out_height;
@@ -483,17 +459,13 @@ static esp_err_t capture_handler(httpd_req_t *req)
     bool s;
     bool detected = false;
     int face_id = 0;
-    if (!detection_enabled || fb->width > 400)
-    {
+    if (!detection_enabled || fb->width > 400) {
 #endif
         size_t fb_len = 0;
-        if (fb->format == PIXFORMAT_JPEG)
-        {
+        if (fb->format == PIXFORMAT_JPEG) {
             fb_len = fb->len;
-            res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
-        }
-        else
-        {
+            res = httpd_resp_send(req, (const char *) fb->buf, fb->len);
+        } else {
             jpg_chunking_t jchunk = {req, 0};
             res = frame2jpg_cb(fb, 80, jpg_encode_stream, &jchunk) ? ESP_OK : ESP_FAIL;
             httpd_resp_send_chunk(req, NULL, 0);
@@ -501,14 +473,13 @@ static esp_err_t capture_handler(httpd_req_t *req)
         }
         esp_camera_fb_return(fb);
         int64_t fr_end = esp_timer_get_time();
-        ESP_LOGI(TAG, "JPG: %uB %ums", (uint32_t)(fb_len), (uint32_t)((fr_end - fr_start) / 1000));
+        ESP_LOGI(TAG, "JPG: %uB %ums", (uint32_t) (fb_len), (uint32_t) ((fr_end - fr_start) / 1000));
         return res;
 #if CONFIG_ESP_FACE_DETECT_ENABLED
     }
 
     dl_matrix3du_t *image_matrix = dl_matrix3du_alloc(1, fb->width, fb->height, 3);
-    if (!image_matrix)
-    {
+    if (!image_matrix) {
         esp_camera_fb_return(fb);
         ESP_LOGE(TAG, "dl_matrix3du_alloc failed");
         httpd_resp_send_500(req);
@@ -522,8 +493,7 @@ static esp_err_t capture_handler(httpd_req_t *req)
 
     s = fmt2rgb888(fb->buf, fb->len, fb->format, out_buf);
     esp_camera_fb_return(fb);
-    if (!s)
-    {
+    if (!s) {
         dl_matrix3du_free(image_matrix);
         ESP_LOGE(TAG, "to rgb888 failed");
         httpd_resp_send_500(req);
@@ -538,12 +508,10 @@ static esp_err_t capture_handler(httpd_req_t *req)
     box_array_t *net_boxes = lssh_detect_object(image_matrix, lssh_config);
 #endif
 
-    if (net_boxes)
-    {
+    if (net_boxes) {
         detected = true;
 #if CONFIG_ESP_FACE_RECOGNITION_ENABLED
-        if (recognition_enabled)
-        {
+        if (recognition_enabled) {
             face_id = run_face_recognition(image_matrix, net_boxes);
         }
 #endif
@@ -558,20 +526,20 @@ static esp_err_t capture_handler(httpd_req_t *req)
     jpg_chunking_t jchunk = {req, 0};
     s = fmt2jpg_cb(out_buf, out_len, out_width, out_height, PIXFORMAT_RGB888, 90, jpg_encode_stream, &jchunk);
     dl_matrix3du_free(image_matrix);
-    if (!s)
-    {
+    if (!s) {
         ESP_LOGE(TAG, "JPEG compression failed");
         return ESP_FAIL;
     }
 
     int64_t fr_end = esp_timer_get_time();
-    ESP_LOGI(TAG, "FACE: %uB %ums %s%d", (uint32_t)(jchunk.len), (uint32_t)((fr_end - fr_start) / 1000), detected ? "DETECTED " : "", face_id);
+    ESP_LOGI(TAG, "FACE: %uB %ums %s%d", (uint32_t) (jchunk.len), (uint32_t) ((fr_end - fr_start) / 1000), detected ? "DETECTED " : "", face_id);
     return res;
 #endif
 }
-extern int test_flag; 
-static esp_err_t stream_handler(httpd_req_t *req)
-{
+
+extern int test_flag;
+
+static esp_err_t stream_handler(httpd_req_t *req) {
     camera_fb_t *fb = NULL;
     struct timeval _timestamp;
     esp_err_t res = ESP_OK;
@@ -590,14 +558,12 @@ static esp_err_t stream_handler(httpd_req_t *req)
 #endif
 
     static int64_t last_frame = 0;
-    if (!last_frame)
-    {
+    if (!last_frame) {
         last_frame = esp_timer_get_time();
     }
 
     res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
-    if (res != ESP_OK)
-    {
+    if (res != ESP_OK) {
         return res;
     }
 
@@ -609,20 +575,16 @@ static esp_err_t stream_handler(httpd_req_t *req)
     isStreaming = true;
 #endif
 
-    while (true)
-    {
+    while (true) {
 #if CONFIG_ESP_FACE_DETECT_ENABLED
         detected = false;
         face_id = 0;
 #endif
         fb = esp_camera_fb_get();
-        if (!fb)
-        {
+        if (!fb) {
             ESP_LOGE(TAG, "Camera capture failed");
             res = ESP_FAIL;
-        }
-        else
-        {
+        } else {
             _timestamp.tv_sec = fb->timestamp.tv_sec;
             _timestamp.tv_usec = fb->timestamp.tv_usec;
 #if CONFIG_ESP_FACE_DETECT_ENABLED
@@ -631,53 +593,39 @@ static esp_err_t stream_handler(httpd_req_t *req)
             fr_face = fr_start;
             fr_encode = fr_start;
             fr_recognize = fr_start;
-            if (!detection_enabled || fb->width > 400)
-            {
+            if (!detection_enabled || fb->width > 400) {
 #endif
-                if (fb->format != PIXFORMAT_JPEG)
-                {
+                if (fb->format != PIXFORMAT_JPEG) {
                     bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
                     esp_camera_fb_return(fb);
                     fb = NULL;
-                    if (!jpeg_converted)
-                    {
+                    if (!jpeg_converted) {
                         ESP_LOGE(TAG, "JPEG compression failed");
                         res = ESP_FAIL;
                     }
-                }
-                else
-                {
+                } else {
                     _jpg_buf_len = fb->len;
                     _jpg_buf = fb->buf;
                 }
 #if CONFIG_ESP_FACE_DETECT_ENABLED
-            }
-            else
-            {
+            } else {
 
                 image_matrix = dl_matrix3du_alloc(1, fb->width, fb->height, 3);
 
-                if (!image_matrix)
-                {
+                if (!image_matrix) {
                     ESP_LOGE(TAG, "dl_matrix3du_alloc failed");
                     res = ESP_FAIL;
-                }
-                else
-                {
-                    if (!fmt2rgb888(fb->buf, fb->len, fb->format, image_matrix->item))
-                    {
+                } else {
+                    if (!fmt2rgb888(fb->buf, fb->len, fb->format, image_matrix->item)) {
                         ESP_LOGE(TAG, "fmt2rgb888 failed");
                         res = ESP_FAIL;
-                    }
-                    else
-                    {
+                    } else {
 #if CONFIG_ESP_FACE_DETECT_LSSH
                         // lssh_update_config(&lssh_config, min_face, image_matrix->h, image_matrix->w);
 #endif
                         fr_ready = esp_timer_get_time();
                         box_array_t *net_boxes = NULL;
-                        if (detection_enabled)
-                        {
+                        if (detection_enabled) {
 #if CONFIG_ESP_FACE_DETECT_MTMN
                             net_boxes = face_detect(image_matrix, &mtmn_config);
 #endif
@@ -688,14 +636,11 @@ static esp_err_t stream_handler(httpd_req_t *req)
                         }
                         fr_face = esp_timer_get_time();
                         fr_recognize = fr_face;
-                        if (net_boxes || fb->format != PIXFORMAT_JPEG)
-                        {
-                            if (net_boxes)
-                            {
+                        if (net_boxes || fb->format != PIXFORMAT_JPEG) {
+                            if (net_boxes) {
                                 detected = true;
 #if CONFIG_ESP_FACE_RECOGNITION_ENABLED
-                                if (recognition_enabled)
-                                {
+                                if (recognition_enabled) {
                                     face_id = run_face_recognition(image_matrix, net_boxes);
                                 }
                                 fr_recognize = esp_timer_get_time();
@@ -707,15 +652,12 @@ static esp_err_t stream_handler(httpd_req_t *req)
                                     dl_lib_free(net_boxes->landmark);
                                 dl_lib_free(net_boxes);
                             }
-                            if (!fmt2jpg(image_matrix->item, fb->width * fb->height * 3, fb->width, fb->height, PIXFORMAT_RGB888, 90, &_jpg_buf, &_jpg_buf_len))
-                            {
+                            if (!fmt2jpg(image_matrix->item, fb->width * fb->height * 3, fb->width, fb->height, PIXFORMAT_RGB888, 90, &_jpg_buf, &_jpg_buf_len)) {
                                 ESP_LOGE(TAG, "fmt2jpg failed");
                             }
                             esp_camera_fb_return(fb);
                             fb = NULL;
-                        }
-                        else
-                        {
+                        } else {
                             _jpg_buf = fb->buf;
                             _jpg_buf_len = fb->len;
                         }
@@ -726,32 +668,25 @@ static esp_err_t stream_handler(httpd_req_t *req)
             }
 #endif
         }
-        if (res == ESP_OK)
-        {
+        if (res == ESP_OK) {
             res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
         }
-        if (res == ESP_OK)
-        {
-            size_t hlen = snprintf((char *)part_buf, 128, _STREAM_PART, _jpg_buf_len, _timestamp.tv_sec, _timestamp.tv_usec);
-            res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
+        if (res == ESP_OK) {
+            size_t hlen = snprintf((char *) part_buf, 128, _STREAM_PART, _jpg_buf_len, _timestamp.tv_sec, _timestamp.tv_usec);
+            res = httpd_resp_send_chunk(req, (const char *) part_buf, hlen);
         }
-        if (res == ESP_OK)
-        {
-            res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+        if (res == ESP_OK) {
+            res = httpd_resp_send_chunk(req, (const char *) _jpg_buf, _jpg_buf_len);
         }
-        if (fb)
-        {
+        if (fb) {
             esp_camera_fb_return(fb);
             fb = NULL;
             _jpg_buf = NULL;
-        }
-        else if (_jpg_buf)
-        {
+        } else if (_jpg_buf) {
             free(_jpg_buf);
             _jpg_buf = NULL;
         }
-        if (res != ESP_OK)
-        {
+        if (res != ESP_OK) {
             break;
         }
         int64_t fr_end = esp_timer_get_time();
@@ -770,21 +705,23 @@ static esp_err_t stream_handler(httpd_req_t *req)
 
         ESP_LOGI(TAG, "MJPG: %uB %ums (%.1ffps), AVG: %ums (%.1ffps)"
 #if CONFIG_ESP_FACE_DETECT_ENABLED
-                      ", %u+%u+%u+%u=%u %s%d"
+            ", %u+%u+%u+%u=%u %s%d"
 #endif
-                 ,
-                 (uint32_t)(_jpg_buf_len),
-                 (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time,
+        //
+        ,
+                 (uint32_t) (_jpg_buf_len),
+                 (uint32_t) frame_time, 1000.0 / (uint32_t) frame_time,
                  avg_frame_time, 1000.0 / avg_frame_time
 #if CONFIG_ESP_FACE_DETECT_ENABLED
-                 ,
-                 (uint32_t)ready_time, (uint32_t)face_time, (uint32_t)recognize_time, (uint32_t)encode_time, (uint32_t)process_time,
+        //
+        ,
+                 (uint32_t) ready_time, (uint32_t) face_time, (uint32_t) recognize_time, (uint32_t) encode_time, (uint32_t) process_time,
                  (detected) ? "DETECTED " : "", face_id
 #endif
         );
         //ESP_LOGI(TAG, "Free heap: %u", xPortGetFreeHeapSize());//Memory monitoring
 
-        }
+    }
 
 #ifdef CONFIG_LED_ILLUMINATOR_ENABLED
     isStreaming = false;
@@ -795,14 +732,13 @@ static esp_err_t stream_handler(httpd_req_t *req)
     return res;
 }
 
-static esp_err_t parse_get(httpd_req_t *req, char **obuf)
-{
+static esp_err_t parse_get(httpd_req_t *req, char **obuf) {
     char *buf = NULL;
     size_t buf_len = 0;
 
     buf_len = httpd_req_get_url_query_len(req) + 1;
     if (buf_len > 1) {
-        buf = (char *)malloc(buf_len);
+        buf = (char *) malloc(buf_len);
         if (!buf) {
             httpd_resp_send_500(req);
             return ESP_FAIL;
@@ -817,8 +753,7 @@ static esp_err_t parse_get(httpd_req_t *req, char **obuf)
     return ESP_FAIL;
 }
 
-static esp_err_t cmd_handler(httpd_req_t *req)
-{
+static esp_err_t cmd_handler(httpd_req_t *req) {
     char *buf = NULL;
     char variable[32];
     char value[32];
@@ -839,13 +774,12 @@ static esp_err_t cmd_handler(httpd_req_t *req)
 
     if (!strcmp(variable, "framesize")) {
         if (s->pixformat == PIXFORMAT_JPEG) {
-            res = s->set_framesize(s, (framesize_t)val);//set_framesize
+            res = s->set_framesize(s, (framesize_t) val);//set_framesize
             if (res == 0) {
                 app_mdns_update_framesize(val);
             }
         }
-    }
-    else if (!strcmp(variable, "quality"))
+    } else if (!strcmp(variable, "quality"))
         res = s->set_quality(s, val);
     else if (!strcmp(variable, "contrast"))
         res = s->set_contrast(s, val);
@@ -854,7 +788,7 @@ static esp_err_t cmd_handler(httpd_req_t *req)
     else if (!strcmp(variable, "saturation"))
         res = s->set_saturation(s, val);
     else if (!strcmp(variable, "gainceiling"))
-        res = s->set_gainceiling(s, (gainceiling_t)val);
+        res = s->set_gainceiling(s, (gainceiling_t) val);
     else if (!strcmp(variable, "colorbar"))
         res = s->set_colorbar(s, val);
     else if (!strcmp(variable, "awb"))
@@ -892,11 +826,11 @@ static esp_err_t cmd_handler(httpd_req_t *req)
     else if (!strcmp(variable, "ae_level"))
         res = s->set_ae_level(s, val);
 #ifdef CONFIG_LED_ILLUMINATOR_ENABLED
-    else if (!strcmp(variable, "led_intensity")) {
-        led_duty = val;
-        if (isStreaming)
-            enable_led(true);
-    }
+        else if (!strcmp(variable, "led_intensity")) {
+            led_duty = val;
+            if (isStreaming)
+                enable_led(true);
+        }
 #endif
 
 #if CONFIG_ESP_FACE_DETECT_ENABLED
@@ -931,45 +865,44 @@ static esp_err_t cmd_handler(httpd_req_t *req)
     return httpd_resp_send(req, NULL, 0);
 }
 
-static int print_reg(char * p, sensor_t * s, uint16_t reg, uint32_t mask){
+static int print_reg(char *p, sensor_t *s, uint16_t reg, uint32_t mask) {
     return sprintf(p, "\"0x%x\":%u,", reg, s->get_reg(s, reg, mask));
 }
 
-static esp_err_t status_handler(httpd_req_t *req)
-{
+static esp_err_t status_handler(httpd_req_t *req) {
     static char json_response[1024];
 
     sensor_t *s = esp_camera_sensor_get();
     char *p = json_response;
     *p++ = '{';
 
-    if(s->id.PID == OV5640_PID || s->id.PID == OV3660_PID){
-        for(int reg = 0x3400; reg < 0x3406; reg+=2){
-            p+=print_reg(p, s, reg, 0xFFF);//12 bit
+    if (s->id.PID == OV5640_PID || s->id.PID == OV3660_PID) {
+        for (int reg = 0x3400; reg < 0x3406; reg += 2) {
+            p += print_reg(p, s, reg, 0xFFF);//12 bit
         }
-        p+=print_reg(p, s, 0x3406, 0xFF);
+        p += print_reg(p, s, 0x3406, 0xFF);
 
-        p+=print_reg(p, s, 0x3500, 0xFFFF0);//16 bit
-        p+=print_reg(p, s, 0x3503, 0xFF);
-        p+=print_reg(p, s, 0x350a, 0x3FF);//10 bit
-        p+=print_reg(p, s, 0x350c, 0xFFFF);//16 bit
+        p += print_reg(p, s, 0x3500, 0xFFFF0);//16 bit
+        p += print_reg(p, s, 0x3503, 0xFF);
+        p += print_reg(p, s, 0x350a, 0x3FF);//10 bit
+        p += print_reg(p, s, 0x350c, 0xFFFF);//16 bit
 
-        for(int reg = 0x5480; reg <= 0x5490; reg++){
-            p+=print_reg(p, s, reg, 0xFF);
-        }
-
-        for(int reg = 0x5380; reg <= 0x538b; reg++){
-            p+=print_reg(p, s, reg, 0xFF);
+        for (int reg = 0x5480; reg <= 0x5490; reg++) {
+            p += print_reg(p, s, reg, 0xFF);
         }
 
-        for(int reg = 0x5580; reg < 0x558a; reg++){
-            p+=print_reg(p, s, reg, 0xFF);
+        for (int reg = 0x5380; reg <= 0x538b; reg++) {
+            p += print_reg(p, s, reg, 0xFF);
         }
-        p+=print_reg(p, s, 0x558a, 0x1FF);//9 bit
+
+        for (int reg = 0x5580; reg < 0x558a; reg++) {
+            p += print_reg(p, s, reg, 0xFF);
+        }
+        p += print_reg(p, s, 0x558a, 0x1FF);//9 bit
     } else {
-        p+=print_reg(p, s, 0xd3, 0xFF);
-        p+=print_reg(p, s, 0x111, 0xFF);
-        p+=print_reg(p, s, 0x132, 0xFF);
+        p += print_reg(p, s, 0xd3, 0xFF);
+        p += print_reg(p, s, 0x111, 0xFF);
+        p += print_reg(p, s, 0x132, 0xFF);
     }
 
     p += sprintf(p, "\"board\":\"%s\",", CAM_BOARD);
@@ -1018,17 +951,15 @@ static esp_err_t status_handler(httpd_req_t *req)
     return httpd_resp_send(req, json_response, strlen(json_response));
 }
 
-static esp_err_t mdns_handler(httpd_req_t *req)
-{
+static esp_err_t mdns_handler(httpd_req_t *req) {
     size_t json_len = 0;
-    const char * json_response = app_mdns_query(&json_len);
+    const char *json_response = app_mdns_query(&json_len);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     return httpd_resp_send(req, json_response, json_len);
 }
 
-static esp_err_t xclk_handler(httpd_req_t *req)
-{
+static esp_err_t xclk_handler(httpd_req_t *req) {
     char *buf = NULL;
     char _xclk[32];
 
@@ -1053,8 +984,7 @@ static esp_err_t xclk_handler(httpd_req_t *req)
     return httpd_resp_send(req, NULL, 0);
 }
 
-static esp_err_t reg_handler(httpd_req_t *req)
-{
+static esp_err_t reg_handler(httpd_req_t *req) {
     char *buf = NULL;
     char _reg[32];
     char _mask[32];
@@ -1085,8 +1015,7 @@ static esp_err_t reg_handler(httpd_req_t *req)
     return httpd_resp_send(req, NULL, 0);
 }
 
-static esp_err_t greg_handler(httpd_req_t *req)
-{
+static esp_err_t greg_handler(httpd_req_t *req) {
     char *buf = NULL;
     char _reg[32];
     char _mask[32];
@@ -1110,22 +1039,20 @@ static esp_err_t greg_handler(httpd_req_t *req)
     ESP_LOGI(TAG, "Get Register: reg: 0x%02x, mask: 0x%02x, value: 0x%02x", reg, mask, res);
 
     char buffer[20];
-    const char * val = itoa(res, buffer, 10);
+    const char *val = itoa(res, buffer, 10);
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     return httpd_resp_send(req, val, strlen(val));
 }
 
-static int parse_get_var(char *buf, const char * key, int def)
-{
+static int parse_get_var(char *buf, const char *key, int def) {
     char _int[16];
-    if(httpd_query_key_value(buf, key, _int, sizeof(_int)) != ESP_OK){
+    if (httpd_query_key_value(buf, key, _int, sizeof(_int)) != ESP_OK) {
         return def;
     }
     return atoi(_int);
 }
 
-static esp_err_t pll_handler(httpd_req_t *req)
-{
+static esp_err_t pll_handler(httpd_req_t *req) {
     char *buf = NULL;
 
     if (parse_get(req, &buf) != ESP_OK) {
@@ -1147,8 +1074,8 @@ static esp_err_t pll_handler(httpd_req_t *req)
     ESP_LOGI(TAG, "Set Pll: bypass: %d, mul: %d, sys: %d, root: %d, pre: %d, seld5: %d, pclken: %d, pclk: %d", bypass, mul, sys, root, pre, seld5, pclken, pclk);
     sensor_t *s = esp_camera_sensor_get();
     int res = s->set_pll(s, bypass, mul, sys, root, pre, seld5, pclken, pclk);
-	ESP_LOGI(TAG, "111111111111%d",res);
-	if (res) {
+    ESP_LOGI(TAG, "111111111111%d", res);
+    if (res) {
         return httpd_resp_send_500(req);
     }
 
@@ -1156,8 +1083,7 @@ static esp_err_t pll_handler(httpd_req_t *req)
     return httpd_resp_send(req, NULL, 0);
 }
 
-static esp_err_t win_handler(httpd_req_t *req)
-{
+static esp_err_t win_handler(httpd_req_t *req) {
     char *buf = NULL;
 
     if (parse_get(req, &buf) != ESP_OK) {
@@ -1180,7 +1106,8 @@ static esp_err_t win_handler(httpd_req_t *req)
     bool binning = parse_get_var(buf, "binning", 0) == 1;
     free(buf);
 
-    ESP_LOGI(TAG, "Set Window: Start: %d %d, End: %d %d, Offset: %d %d, Total: %d %d, Output: %d %d, Scale: %u, Binning: %u", startX, startY, endX, endY, offsetX, offsetY, totalX, totalY, outputX, outputY, scale, binning);
+    ESP_LOGI(TAG, "Set Window: Start: %d %d, End: %d %d, Offset: %d %d, Total: %d %d, Output: %d %d, Scale: %u, Binning: %u", startX, startY, endX, endY, offsetX, offsetY, totalX, totalY, outputX,
+             outputY, scale, binning);
     sensor_t *s = esp_camera_sensor_get();
     int res = s->set_res_raw(s, startX, startY, endX, endY, offsetX, offsetY, totalX, totalY, outputX, outputY, scale, binning);
     if (res) {
@@ -1191,8 +1118,7 @@ static esp_err_t win_handler(httpd_req_t *req)
     return httpd_resp_send(req, NULL, 0);
 }
 
-static esp_err_t index_handler(httpd_req_t *req)
-{
+static esp_err_t index_handler(httpd_req_t *req) {
     extern const unsigned char index_ov2640_html_gz_start[] asm("_binary_index_ov2640_html_gz_start");
     extern const unsigned char index_ov2640_html_gz_end[] asm("_binary_index_ov2640_html_gz_end");
     size_t index_ov2640_html_gz_len = index_ov2640_html_gz_end - index_ov2640_html_gz_start;
@@ -1210,11 +1136,11 @@ static esp_err_t index_handler(httpd_req_t *req)
     sensor_t *s = esp_camera_sensor_get();
     if (s != NULL) {
         if (s->id.PID == OV3660_PID) {
-            return httpd_resp_send(req, (const char *)index_ov3660_html_gz_start, index_ov3660_html_gz_len);
+            return httpd_resp_send(req, (const char *) index_ov3660_html_gz_start, index_ov3660_html_gz_len);
         } else if (s->id.PID == OV5640_PID) {
-            return httpd_resp_send(req, (const char *)index_ov5640_html_gz_start, index_ov5640_html_gz_len);
+            return httpd_resp_send(req, (const char *) index_ov5640_html_gz_start, index_ov5640_html_gz_len);
         } else {
-            return httpd_resp_send(req, (const char *)index_ov2640_html_gz_start, index_ov2640_html_gz_len);
+            return httpd_resp_send(req, (const char *) index_ov2640_html_gz_start, index_ov2640_html_gz_len);
         }
     } else {
         ESP_LOGE(TAG, "Camera sensor not found");
@@ -1222,18 +1148,16 @@ static esp_err_t index_handler(httpd_req_t *req)
     }
 }
 
-static esp_err_t monitor_handler(httpd_req_t *req)
-{
+static esp_err_t monitor_handler(httpd_req_t *req) {
     extern const unsigned char monitor_html_gz_start[] asm("_binary_monitor_html_gz_start");
     extern const unsigned char monitor_html_gz_end[] asm("_binary_monitor_html_gz_end");
     size_t monitor_html_gz_len = monitor_html_gz_end - monitor_html_gz_start;
     httpd_resp_set_type(req, "text/html");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    return httpd_resp_send(req, (const char *)monitor_html_gz_start, monitor_html_gz_len);
+    return httpd_resp_send(req, (const char *) monitor_html_gz_start, monitor_html_gz_len);
 }
 
-void app_httpd_main()
-{
+void app_httpd_main() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 12;
 
@@ -1313,7 +1237,7 @@ void app_httpd_main()
 
 #if CONFIG_ESP_FACE_DETECT_ENABLED
 
-#if CONFIG_ESP_FACE_DETECT_MTMN 
+#if CONFIG_ESP_FACE_DETECT_MTMN
     mtmn_config.type = FAST;
     mtmn_config.min_face = 80;
     mtmn_config.pyramid = 0.707;
@@ -1341,8 +1265,7 @@ void app_httpd_main()
 
 #endif
     ESP_LOGI(TAG, "Starting web server on port: '%d'", config.server_port);
-    if (httpd_start(&camera_httpd, &config) == ESP_OK)
-    {
+    if (httpd_start(&camera_httpd, &config) == ESP_OK) {
         httpd_register_uri_handler(camera_httpd, &index_uri);
         httpd_register_uri_handler(camera_httpd, &cmd_uri);
         httpd_register_uri_handler(camera_httpd, &status_uri);
@@ -1354,7 +1277,7 @@ void app_httpd_main()
         httpd_register_uri_handler(camera_httpd, &greg_uri);
         httpd_register_uri_handler(camera_httpd, &pll_uri);
         httpd_register_uri_handler(camera_httpd, &win_uri);
-#endif 
+#endif
         httpd_register_uri_handler(camera_httpd, &mdns_uri);
         httpd_register_uri_handler(camera_httpd, &monitor_uri);
     }
@@ -1362,8 +1285,7 @@ void app_httpd_main()
     config.server_port += 1;
     config.ctrl_port += 1;
     ESP_LOGI(TAG, "Starting stream server on port: '%d'", config.server_port);
-    if (httpd_start(&stream_httpd, &config) == ESP_OK)
-    {
+    if (httpd_start(&stream_httpd, &config) == ESP_OK) {
         httpd_register_uri_handler(stream_httpd, &stream_uri);
     }
 }

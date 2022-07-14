@@ -26,13 +26,10 @@
 #include "esp_log.h"
 #include "sdkconfig.h"
 
-void app_main()
-{
-    
+void app_main() {
     app_board_main();
     app_httpd_main();
     app_mdns_main();
 
-    ESP_LOGI("esp-cam Version",CONFIG_ESP_CAM_VERSION);
-
+    ESP_LOGI("esp-cam Version", CONFIG_ESP_CAM_VERSION);
 }

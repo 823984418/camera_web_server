@@ -28,9 +28,7 @@
 
 static const char *TAG = "app_camera";
 
-void app_camera_main ()
-{
-
+void app_camera_main() {
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -69,9 +67,9 @@ void app_camera_main ()
         .hpoint     = 0,
         .timer_sel  = CONFIG_LED_LEDC_TIMER
     };
-    #ifdef CONFIG_LED_LEDC_HIGH_SPEED_MODE
+#ifdef CONFIG_LED_LEDC_HIGH_SPEED_MODE
     ledc_timer.speed_mode = ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
-    #endif
+#endif
     switch (ledc_timer_config(&ledc_timer)) {
         case ESP_ERR_INVALID_ARG: ESP_LOGE(TAG, "ledc_timer_config() parameter error"); break;
         case ESP_FAIL: ESP_LOGE(TAG, "ledc_timer_config() Can not find a proper pre-divider number base on the given frequency and the current duty_resolution"); break;
@@ -116,7 +114,7 @@ void app_camera_main ()
         return;
     }
 
-    sensor_t * s = esp_camera_sensor_get();
+    sensor_t *s = esp_camera_sensor_get();
     //initial sensors are flipped vertically and colors are a bit saturated
     if (s->id.PID == OV3660_PID) {
         s->set_vflip(s, 1);//flip it back

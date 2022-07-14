@@ -36,7 +36,7 @@ typedef struct {
     SemaphoreHandle_t frame_ready;
     TaskHandle_t dma_filter_task;
 } sd_state_t;
-static sdmmc_card_t* card;
+static sdmmc_card_t *card;
 //sd_state_t* sd_state = NULL;
 QueueHandle_t sd_ready;
 #ifdef USE_SPI_MODE
@@ -49,12 +49,11 @@ QueueHandle_t sd_ready;
 #define PIN_NUM_CS   13
 #endif //USE_SPI_MODE
 
-void sd_write(const char *_jpg_buf, int _jpg_buf_len)
-{
-   // Use POSIX and C standard library functions to work with files.
+void sd_write(const char *_jpg_buf, int _jpg_buf_len) {
+    // Use POSIX and C standard library functions to work with files.
     // First create a file.
     ESP_LOGI(TAG, "Opening file");
-    FILE* f = fopen("/sdcard/hello.txt", "w");
+    FILE *f = fopen("/sdcard/hello.txt", "w");
     if (f == NULL) {
         ESP_LOGE(TAG, "Failed to open file for writing");
         return;
@@ -88,7 +87,7 @@ void sd_write(const char *_jpg_buf, int _jpg_buf_len)
     fgets(line, sizeof(line), f);
     fclose(f);
     // strip newline
-    char* pos = strchr(line, '\n');
+    char *pos = strchr(line, '\n');
     if (pos) {
         *pos = '\0';
     }
@@ -99,17 +98,16 @@ void sd_write(const char *_jpg_buf, int _jpg_buf_len)
     ESP_LOGI(TAG, "Card unmounted");
 }
 
-static void Sdcard_task(void *pvParameters)
-{
+static void Sdcard_task(void *pvParameters) {
 
-        while (true){
-           
-            vTaskDelay((5*1000) / portTICK_PERIOD_MS);
-        }
-     vTaskDelete(NULL);
+    while (true) {
+
+        vTaskDelay((5 * 1000) / portTICK_PERIOD_MS);
+    }
+    vTaskDelete(NULL);
 }
-void SdCard_init(void)
-{
+
+void SdCard_init(void) {
 #if CONFIG_ESP_SNTP_ENABLED
     {
     time_t now;

@@ -18,8 +18,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 typedef signed char int8_t;
+
 void app_httpd_main();
+
 #if 0
 int8_t e_save_face_id_to_flash(void);
 int8_t e_delete_face_id_in_flash(void);

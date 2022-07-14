@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-uint8_t CMDParse( uint8_t* p_cmd, uint8_t len );
+uint8_t CMDParse(uint8_t *p_cmd, uint8_t len);
 
 
 #ifdef __cplusplus
